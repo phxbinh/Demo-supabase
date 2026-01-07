@@ -6,28 +6,12 @@ const { init, addRoute, Link, Outlet, beforeEach, navbarDynamic } = window.App.R
 function Navbar() {
   const [user, setUser] = useState(null);
 
-/*
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => setUser(data.session?.user ?? null));
     supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
     });
   }, []);
-*/
-useEffect(() => {
-  supabase.auth.getSession().then(({ data }) =>
-    setUser(data.session?.user ?? null)
-  );
-
-  const { data: { subscription } } =
-    supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-    });
-
-  return () => subscription.unsubscribe();
-}, []);
-
-
 
   return h('nav', null,
     h(Link, { to: '/', children: 'Home' }),
@@ -75,17 +59,6 @@ function Login() {
   const [message, setMessage] = useState('');
   const [loading, setLoading] = useState(false);
 
-/*
-  const signUp = async () => {
-    setLoading(true);
-    setMessage('');
-    const { error } = await supabase.auth.signUp({ email, password });
-    setLoading(false);
-    if (error) setMessage('Lỗi: ' + error.message);
-    else setMessage('Đăng ký thành công! Kiểm tra email để xác nhận.');
-  };
-*/
-
 const signUp = async () => {
   setLoading(true);
   setMessage('');
@@ -93,33 +66,9 @@ const signUp = async () => {
     email,
     password,
     options: {
-      // Cần thay lại tên trùng với domain khi deploy trên vercel.com
-      //emailRedirectTo: 'https://framework-supabase.vercel.app'
       emailRedirectTo: window.location.origin
     }
   });
-
-/* sử dụng cho signUp
-thay đổi url để sau khi confirm từ email thì chuyển tới trang luôn
-https://supabase.com/dashboard/project/defkqhylqphoqiikvbii/auth/url-configuration
-
-để dùng cho cái này:
-emailRedirectTo: 'https://framework-supabase.vercel.app'
-*/
-
-  setLoading(false);
-
-/*
-  if (error) setMessage('Lỗi: ' + error.message);
-  else setMessage('Đăng ký thành công! Kiểm tra email để xác nhận.');
-*/
-if (error) {
-  setMessage('Lỗi: ' + (error.message || 'Không xác định'));
-} else {
-  setMessage('Đăng ký thành công! Kiểm tra email để xác nhận.');
-}
-
-};
 
   const signIn = async () => {
     setLoading(true);
@@ -146,7 +95,7 @@ function Dashboard() {
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data }) => {
-      if (!data.session) App.Router.navigateTo('/login');
+      if (!data.session) Router.navigateTo('/login');
       else setUser(data.session.user);
     });
   }, []);
@@ -161,7 +110,6 @@ function Dashboard() {
 }
 
 // Bảo vệ route Dashboard
-/*
 beforeEach(async (to, from, next) => {
   if (to === '/dashboard') {
     const { data } = await supabase.auth.getSession();
@@ -169,17 +117,6 @@ beforeEach(async (to, from, next) => {
   }
   next();
 });
-*/
-beforeEach(async (to, from, next) => {
-  if (to !== '/dashboard') return next();
-
-  const { data } = await supabase.auth.getSession();
-  if (!data.session) return next('/login');
-
-  next();
-});
-
-
 
 // Đăng ký routes
 addRoute('/', Home);
