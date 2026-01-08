@@ -30,7 +30,7 @@ function Navbar() {
       supabase.auth.signOut();
     }
   },
-  'Đăng xuất'
+  'Đăng xuất')
 ) :
       h(Link, { to: '/login', children: 'Đăng nhập'})
   );
