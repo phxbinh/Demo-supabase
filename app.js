@@ -1,38 +1,15 @@
 const { h } = window.App.VDOM;
 const { useState, useEffect } = window.App.Hooks;
-const { init, addRoute, Link, Outlet, beforeEach, navbarDynamic } = window.App.Router;
+const { init, addRoute, Link, Outlet, navbarDynamic } = window.App.Router;
 
-// Navbar động
+// Navbar đơn giản (không auth)
 function Navbar() {
-  const [user, setUser] = useState(null);
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => setUser(data.session?.user ?? null));
-    supabase.auth.onAuthStateChange((_event, session) => {
-      setUser(session?.user ?? null);
-    });
-  }, []);
-
   return h('nav', null,
     h(Link, { to: '/', children: 'Home' }),
     ' | ',
-    h(Link, { to: '/about', children: 'About'}),
+    h(Link, { to: '/about', children: 'About' }),
     ' | ',
-    h(Link, { to: '/dashboard', children: 'Dashboard' }),
-    ' | ',
-    user ? 
-      h('span', null, `Xin chào ${user.email} | `, h(
-  'a',
-  {
-    href: 'javascript:void(0)',
-    onClick: (e) => {
-      e.preventDefault();
-      supabase.auth.signOut();
-    }
-  },
-  'Đăng xuất')
-) :
-      h(Link, { to: '/login', children: 'Đăng nhập'})
+    h(Link, { to: '/tasks', children: 'Quản lý Tasks (CRUD)' })
   );
 }
 
@@ -40,89 +17,174 @@ function Navbar() {
 function Home() {
   return h('div', { className: 'container' },
     h('h1', null, 'Chào mừng đến với Framework Tự Build!'),
-    h('p', null, 'Bạn đang dùng VDOM + Hooks + Router + Supabase Auth tự code.'),
-    h('p', null, 'Hãy thử đăng nhập để vào Dashboard.')
+    h('p', null, 'Demo CRUD đơn giản với Supabase (bảng tasks).'),
+    h('p', null, 'Không cần đăng nhập.')
   );
 }
 
 function About() {
   return h('div', { className: 'container' },
     h('h1', null, 'Giới Thiệu'),
-    h('p', null, 'Đây là một framework frontend nhẹ, tự build từ đầu.'),
-    h('p', null, 'Tích hợp Supabase để có đăng ký/đăng nhập an toàn.')
+    h('p', null, 'Framework frontend nhẹ tự build: VDOM + Hooks + Router.'),
+    h('p', null, 'Tích hợp Supabase để thao tác database realtime.')
   );
 }
 
-function Login() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [message, setMessage] = useState('');
+// Component CRUD Tasks
+function Tasks() {
+  const [tasks, setTasks] = useState([]);
+  const [newTitle, setNewTitle] = useState('');
+  const [editingId, setEditingId] = useState(null);
+  const [editTitle, setEditTitle] = useState('');
   const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState('');
 
-const signUp = async () => {
-  setLoading(true);
-  setMessage('');
-  const { error } = await supabase.auth.signUp({
-    email,
-    password,
-    options: {
-      emailRedirectTo: window.location.origin
-    }
-  });
+  // Load tasks
+  useEffect(() => {
+    fetchTasks();
+  }, []);
 
-  const signIn = async () => {
+  const fetchTasks = async () => {
     setLoading(true);
-    setMessage('');
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { data, error } = await supabase
+      .from('tasks')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      setMessage('Lỗi load: ' + error.message);
+    } else {
+      setTasks(data || []);
+    }
     setLoading(false);
-    if (error) setMessage('Lỗi: ' + error.message);
-    else setMessage('Đăng nhập thành công!');
+  };
+
+  // Add task
+  const addTask = async () => {
+    if (!newTitle.trim()) return;
+    setLoading(true);
+    const { error } = await supabase
+      .from('tasks')
+      .insert({ title: newTitle.trim() });
+
+    if (error) {
+      setMessage('Lỗi thêm: ' + error.message);
+    } else {
+      setNewTitle('');
+      fetchTasks();
+      setMessage('Thêm thành công!');
+    }
+    setLoading(false);
+  };
+
+  // Update task
+  const startEdit = (task) => {
+    setEditingId(task.id);
+    setEditTitle(task.title);
+  };
+
+  const saveEdit = async () => {
+    if (!editTitle.trim()) return;
+    setLoading(true);
+    const { error } = await supabase
+      .from('tasks')
+      .update({ title: editTitle.trim() })
+      .eq('id', editingId);
+
+    if (error) {
+      setMessage('Lỗi sửa: ' + error.message);
+    } else {
+      setEditingId(null);
+      fetchTasks();
+      setMessage('Sửa thành công!');
+    }
+    setLoading(false);
+  };
+
+  // Toggle completed
+  const toggleCompleted = async (task) => {
+    const { error } = await supabase
+      .from('tasks')
+      .update({ completed: !task.completed })
+      .eq('id', task.id);
+
+    if (!error) fetchTasks();
+  };
+
+  // Delete task
+  const deleteTask = async (id) => {
+    setLoading(true);
+    const { error } = await supabase
+      .from('tasks')
+      .delete()
+      .eq('id', id);
+
+    if (error) {
+      setMessage('Lỗi xóa: ' + error.message);
+    } else {
+      fetchTasks();
+      setMessage('Xóa thành công!');
+    }
+    setLoading(false);
   };
 
   return h('div', { className: 'container' },
-    h('h1', null, 'Đăng nhập / Đăng ký'),
-    h('input', { type: 'email', placeholder: 'Email', value: email, onInput: e => setEmail(e.target.value) }),
-    h('input', { type: 'password', placeholder: 'Mật khẩu (tối thiểu 6 ký tự)', value: password, onInput: e => setPassword(e.target.value) }),
-    h('button', { onClick: signUp, disabled: loading }, loading ? 'Đang xử lý...' : 'Đăng ký'),
-    ' ',
-    h('button', { onClick: signIn, disabled: loading }, loading ? 'Đang xử lý...' : 'Đăng nhập'),
-    message && h('p', { style: { color: message.includes('Lỗi') ? 'red' : 'green', marginTop: '1rem' } }, message)
+    h('h1', null, 'Quản lý Tasks (CRUD Demo)'),
+    
+    // Form thêm task
+    h('div', { style: { marginBottom: '2rem' } },
+      h('input', {
+        type: 'text',
+        placeholder: 'Nhập tiêu đề task mới',
+        value: newTitle,
+        onInput: e => setNewTitle(e.target.value),
+        disabled: loading
+      }),
+      h('button', { onClick: addTask, disabled: loading || !newTitle.trim() }, 'Thêm Task')
+    ),
+
+    // Message
+    message && h('p', { style: { color: message.includes('Lỗi') ? 'red' : 'green' } }, message),
+
+    // Danh sách tasks
+    loading ? h('p', null, 'Đang tải...') :
+    h('ul', { style: { listStyle: 'none', padding: 0 } },
+      tasks.map(task =>
+        h('li', { key: task.id, style: { marginBottom: '1rem', padding: '1rem', border: '1px solid #ccc' } },
+          h('input', {
+            type: 'checkbox',
+            checked: task.completed || false,
+            onChange: () => toggleCompleted(task)
+          }),
+          ' ',
+          editingId === task.id ?
+            h('span', null,
+              h('input', {
+                type: 'text',
+                value: editTitle,
+                onInput: e => setEditTitle(e.target.value)
+              }),
+              ' ',
+              h('button', { onClick: saveEdit }, 'Lưu'),
+              h('button', { onClick: () => setEditingId(null) }, 'Hủy')
+            ) :
+            h('span', { style: { textDecoration: task.completed ? 'line-through' : 'none' } },
+              task.title
+            ),
+          '   ',
+          editingId !== task.id && h('button', { onClick: () => startEdit(task) }, 'Sửa'),
+          ' ',
+          h('button', { onClick: () => deleteTask(task.id), style: { color: 'red' } }, 'Xóa')
+        )
+      )
+    )
   );
 }
-
-function Dashboard() {
-  const [user, setUser] = useState(null);
-
-  useEffect(() => {
-    supabase.auth.getSession().then(({ data }) => {
-      if (!data.session) Router.navigateTo('/login');
-      else setUser(data.session.user);
-    });
-  }, []);
-
-  if (!user) return h('div', { className: 'container' }, 'Đang tải...');
-
-  return h('div', { className: 'container' },
-    h('h1', null, 'Dashboard Bí Mật'),
-    h('p', null, `Chỉ thành viên mới vào được. Xin chào ${user.email}!`),
-    h('p', null, 'Bạn đã đăng nhập thành công bằng Supabase Auth.')
-  );
-}
-
-// Bảo vệ route Dashboard
-beforeEach(async (to, from, next) => {
-  if (to === '/dashboard') {
-    const { data } = await supabase.auth.getSession();
-    if (!data.session) return next('/login');
-  }
-  next();
-});
 
 // Đăng ký routes
 addRoute('/', Home);
 addRoute('/about', About);
-addRoute('/login', Login);
-addRoute('/dashboard', Dashboard);
+addRoute('/tasks', Tasks);
 
 navbarDynamic({ navbar: Navbar });
 
